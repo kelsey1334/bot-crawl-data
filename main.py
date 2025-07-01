@@ -1,45 +1,49 @@
-import asyncio
 import os
+import io
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from dateutil import parser
 from telegram import Update, InputFile
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 )
-import io
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Railway: add BOT_TOKEN env var
+BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Railway sẽ lấy token này từ biến môi trường
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Gửi file Excel (.xlsx) chứa danh sách URL trong cột A (header là URL). "
-        "Bot sẽ crawl và gửi lại file kết quả Excel."
+        "Gửi file Excel (.xlsx) có cột 'URL'. Bot sẽ crawl Title, Description, Date, Image cho bạn và trả về file Excel."
     )
 
 def crawl_url(url):
     try:
         res = requests.get(url, timeout=10)
         soup = BeautifulSoup(res.text, "html.parser")
-        # Title & Description
+        # Lấy các trường meta
         title = soup.find("meta", property="og:title")
         desc = soup.find("meta", property="og:description")
-        # Image (cả post và page đều thử lấy cả hai)
         image = soup.find("meta", property="og:image") or soup.find("meta", property="og:image:secure_url")
-        # Date
         entry_date = soup.find("time", class_="entry-date published updated")
         updated_time = soup.find("meta", property="og:updated_time")
-        # Lấy trường nào có dữ liệu
-        date = None
+        # Lấy trường ngày
+        date_str = None
         if entry_date:
-            date = entry_date.get("datetime") or entry_date.text
+            date_str = entry_date.get("datetime") or entry_date.text
         elif updated_time:
-            date = updated_time.get("content")
+            date_str = updated_time.get("content")
+        # Chỉ lấy ngày/tháng/năm
+        date_fmt = ""
+        if date_str:
+            try:
+                date_fmt = parser.parse(date_str).strftime("%Y-%m-%d")
+            except Exception:
+                date_fmt = date_str  # Nếu lỗi thì trả raw
         return {
             "URL": url,
             "Title": title["content"] if title and "content" in title.attrs else "",
             "Description": desc["content"] if desc and "content" in desc.attrs else "",
-            "Date": date or "",
+            "Date": date_fmt,
             "Image": image["content"] if image and "content" in image.attrs else ""
         }
     except Exception:
