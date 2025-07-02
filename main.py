@@ -8,6 +8,10 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 )
 import io
+import urllib3
+
+# Tắt cảnh báo khi dùng verify=False (không khuyến khích cho production)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Railway: add BOT_TOKEN env var
 
@@ -19,7 +23,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def crawl_url(url):
     try:
-        res = requests.get(url, timeout=10)
+        try:
+            res = requests.get(url, timeout=10)
+        except requests.exceptions.SSLError:
+            # Nếu gặp lỗi SSL thì retry với verify=False
+            res = requests.get(url, timeout=10, verify=False)
         soup = BeautifulSoup(res.text, "html.parser")
         # Title & Description
         title = soup.find("meta", property="og:title")
